@@ -8,8 +8,7 @@ use std::{
 };
 
 use crate::models::{
-    Components, Operation, OpenAPI, 
-    ParsedApiInfo, ParsedOperation, PathItem, Schema, Server
+    Components, OpenAPI, Operation, ParsedApiInfo, ParsedOperation, PathItem, Schema, Server,
 };
 
 // Add #[allow(dead_code)] before the constant to suppress the warning
@@ -27,7 +26,12 @@ pub struct Generator {
 impl Generator {
     /// Create a new Generator instance
     #[allow(dead_code)]
-    pub fn new(api_info: ParsedApiInfo, operations: Vec<ParsedOperation>, schemas: HashMap<String, Schema>, openapi_version: String) -> Self {
+    pub fn new(
+        api_info: ParsedApiInfo,
+        operations: Vec<ParsedOperation>,
+        schemas: HashMap<String, Schema>,
+        openapi_version: String,
+    ) -> Self {
         Self {
             api_info,
             operations,
@@ -36,11 +40,11 @@ impl Generator {
             openapi_version,
         }
     }
-    
+
     /// Create a new Generator instance with custom maximum file size
     pub fn new_with_max_file_size(
-        api_info: ParsedApiInfo, 
-        operations: Vec<ParsedOperation>, 
+        api_info: ParsedApiInfo,
+        operations: Vec<ParsedOperation>,
         schemas: HashMap<String, Schema>,
         max_file_size: usize,
         openapi_version: String,
@@ -53,18 +57,20 @@ impl Generator {
             openapi_version,
         }
     }
-    
+
     /// Generate OpenAPI 3.1.1 documentation in the specified output formats
     pub fn generate(&self, output_dir: impl AsRef<Path>, output_types: &[String]) -> Result<()> {
         let output_dir = output_dir.as_ref();
-        
+
         // Create output directory if it doesn't exist
-        fs::create_dir_all(output_dir)
-            .context(format!("Failed to create output directory: {:?}", output_dir))?;
-        
+        fs::create_dir_all(output_dir).context(format!(
+            "Failed to create output directory: {:?}",
+            output_dir
+        ))?;
+
         // Build the OpenAPI document
         let openapi = self.build_openapi_doc();
-        
+
         // Generate the specified output types
         for output_type in output_types {
             match output_type.as_str() {
@@ -75,14 +81,14 @@ impl Generator {
                     // Generate both Swagger UI HTML template and handler
                     self.generate_swagger_ui(output_dir)?;
                     self.generate_swagger_handler(output_dir)?;
-                },
+                }
                 _ => debug!("Unknown output type: {}", output_type),
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Build a complete OpenAPI 3.1.1 document
     fn build_openapi_doc(&self) -> OpenAPI {
         let mut openapi = OpenAPI {
@@ -92,11 +98,11 @@ impl Generator {
             components: None, // Will be set later
             ..Default::default()
         };
-        
+
         // Convert servers from legacy host/basePath/schemes
         if self.api_info.servers.is_empty() {
             let mut servers = Vec::new();
-            
+
             if let Some(host) = &self.api_info.host {
                 for scheme in &self.api_info.schemes {
                     let url = format!(
@@ -105,7 +111,7 @@ impl Generator {
                         host,
                         self.api_info.base_path.as_deref().unwrap_or("")
                     );
-                    
+
                     servers.push(Server {
                         url,
                         description: None,
@@ -113,65 +119,68 @@ impl Generator {
                     });
                 }
             }
-            
+
             if !servers.is_empty() {
                 openapi.servers = Some(servers);
             }
         } else {
             openapi.servers = Some(self.api_info.servers.clone());
         }
-        
+
         // Always create a components object, even if empty
         let mut components = Components::default();
-        
+
         // Add security definitions to components
         if !self.api_info.security_definitions.is_empty() {
             components.securitySchemes = self.api_info.security_definitions.clone();
         }
-        
+
         // Add schemas to components
         components.schemas = self.schemas.clone();
-        
+
         // Even if schemas is empty, explicitly ensure it exists and doesn't get skipped
         if components.schemas.is_empty() {
             debug!("No schemas found, creating empty schemas object");
             components.ensure_schemas_exists();
         }
-        
+
         // Fix schema references in components
         self.fix_schema_references(&mut components);
-        
+
         // Set the components in the OpenAPI document (always set it, even if empty)
         openapi.components = Some(components);
-        
+
         // Copy tags and external docs
         openapi.tags = self.api_info.tags.clone();
         openapi.externalDocs = self.api_info.external_docs.clone();
-        
+
         // Copy global security requirements
         if !self.api_info.security.is_empty() {
             openapi.security = self.api_info.security.clone();
         }
-        
+
         // Add operations to paths
         for operation in &self.operations {
             let path = operation.path.clone();
             let method = operation.method.clone();
-            
+
             let path_item = openapi.paths.entry(path).or_insert_with(PathItem::default);
-            
+
             // Convert legacy consumes/produces to requestBody/responses content
             let mut op = operation.operation.clone();
-            
+
             // Fix schema references in the operation
             self.fix_operation_references(&mut op);
-            
+
             // Add path parameters if needed
-            path_item.parameters = operation.operation.parameters.iter()
+            path_item.parameters = operation
+                .operation
+                .parameters
+                .iter()
                 .filter(|p| p.in_type == "path")
                 .cloned()
                 .collect();
-            
+
             match method.as_str() {
                 "get" => path_item.get = Some(op),
                 "post" => path_item.post = Some(op),
@@ -184,10 +193,10 @@ impl Generator {
                 _ => debug!("Unknown HTTP method: {}", method),
             }
         }
-        
+
         openapi
     }
-    
+
     /// Fix references in schemas to use the correct format for OpenAPI 3.1.1
     fn fix_schema_references(&self, components: &mut Components) {
         // Fix references in all schemas
@@ -195,7 +204,7 @@ impl Generator {
             self.fix_references_in_schema(schema);
         }
     }
-    
+
     /// Fix references in an operation to use the correct format for OpenAPI 3.1.1
     fn fix_operation_references(&self, operation: &mut Operation) {
         // Fix references in parameters
@@ -204,7 +213,7 @@ impl Generator {
                 self.fix_references_in_schema(schema);
             }
         }
-        
+
         // Fix references in request body
         if let Some(request_body) = &mut operation.requestBody {
             for (_, media_type) in request_body.content.iter_mut() {
@@ -213,7 +222,7 @@ impl Generator {
                 }
             }
         }
-        
+
         // Fix references in responses
         for (_, response) in operation.responses.iter_mut() {
             for (_, media_type) in response.content.iter_mut() {
@@ -223,7 +232,7 @@ impl Generator {
             }
         }
     }
-    
+
     /// Recursively fix references in a schema
     fn fix_references_in_schema(&self, schema: &mut Schema) {
         // Fix $ref format if present
@@ -251,78 +260,94 @@ impl Generator {
                 }
             }
         }
-        
+
         // Fix references in items (for arrays)
         if let Some(items) = &mut schema.items {
             self.fix_references_in_schema(items);
         }
-        
+
         // Fix references in properties (for objects)
         for (_, property) in schema.properties.iter_mut() {
             self.fix_references_in_schema(property);
         }
-        
+
         // Fix references in allOf, anyOf, oneOf
         if let Some(all_of) = &mut schema.allOf {
             for schema_item in all_of.iter_mut() {
                 self.fix_references_in_schema(schema_item);
             }
         }
-        
+
         if let Some(any_of) = &mut schema.anyOf {
             for schema_item in any_of.iter_mut() {
                 self.fix_references_in_schema(schema_item);
             }
         }
-        
+
         if let Some(one_of) = &mut schema.oneOf {
             for schema_item in one_of.iter_mut() {
                 self.fix_references_in_schema(schema_item);
             }
         }
-        
+
         // Fix references in not
         if let Some(not) = &mut schema.not {
             self.fix_references_in_schema(not);
         }
     }
-    
+
     /// Write content to a file, splitting it into chunks if necessary
-    fn write_chunked_file(&self, output_dir: &Path, base_filename: &str, content: &str, file_ext: &str) -> Result<()> {
+    fn write_chunked_file(
+        &self,
+        output_dir: &Path,
+        base_filename: &str,
+        content: &str,
+        file_ext: &str,
+    ) -> Result<()> {
         // If content is smaller than max file size, write it to a single file
         if content.len() <= self.max_file_size {
             let file_path = output_dir.join(format!("{}.{}", base_filename, file_ext));
             let mut file = File::create(&file_path)
                 .context(format!("Failed to create file: {:?}", file_path))?;
-            
+
             file.write_all(content.as_bytes())
                 .context(format!("Failed to write to file: {:?}", file_path))?;
-            
+
             info!("Generated file: {:?}", file_path);
             return Ok(());
         }
-        
+
         // Otherwise, split content into chunks and write multiple files
         let mut chunk_number = 1;
         let mut start_idx = 0;
-        
+
         // Create a directory for chunked files
         let chunked_dir = output_dir.join(format!("{}-split", base_filename));
-        fs::create_dir_all(&chunked_dir)
-            .context(format!("Failed to create directory for chunked files: {:?}", chunked_dir))?;
-        
+        fs::create_dir_all(&chunked_dir).context(format!(
+            "Failed to create directory for chunked files: {:?}",
+            chunked_dir
+        ))?;
+
         // Create an index file
         let index_path = output_dir.join(format!("{}.{}", base_filename, file_ext));
-        let mut index_content = format!("// This file is an index for the chunked {} files\n", file_ext);
-        index_content.push_str(&format!("// The content has been split into multiple files due to its large size\n"));
-        index_content.push_str(&format!("// See the '{}-split' directory for the actual content files\n", base_filename));
-        
+        let mut index_content = format!(
+            "// This file is an index for the chunked {} files\n",
+            file_ext
+        );
+        index_content.push_str(&format!(
+            "// The content has been split into multiple files due to its large size\n"
+        ));
+        index_content.push_str(&format!(
+            "// See the '{}-split' directory for the actual content files\n",
+            base_filename
+        ));
+
         let mut file = File::create(&index_path)
             .context(format!("Failed to create index file: {:?}", index_path))?;
-        
+
         file.write_all(index_content.as_bytes())
             .context(format!("Failed to write to index file: {:?}", index_path))?;
-        
+
         // Create individual chunk files
         while start_idx < content.len() {
             let end_idx = if start_idx + self.max_file_size >= content.len() {
@@ -330,70 +355,77 @@ impl Generator {
             } else {
                 // Try to find a good split point (e.g., a newline) near the max size
                 let potential_end = start_idx + self.max_file_size;
-                let search_range = potential_end.saturating_sub(1000)..std::cmp::min(potential_end + 1000, content.len());
-                
+                let search_range = potential_end.saturating_sub(1000)
+                    ..std::cmp::min(potential_end + 1000, content.len());
+
                 // Find the next newline after the potential end
-                content[search_range.clone()].find('\n')
+                content[search_range.clone()]
+                    .find('\n')
                     .map(|pos| search_range.start + pos + 1)
                     .unwrap_or(potential_end)
             };
-            
+
             let chunk = &content[start_idx..end_idx];
-            let chunk_path = chunked_dir.join(format!("{}_{}.{}", base_filename, chunk_number, file_ext));
-            
+            let chunk_path =
+                chunked_dir.join(format!("{}_{}.{}", base_filename, chunk_number, file_ext));
+
             let mut chunk_file = File::create(&chunk_path)
                 .context(format!("Failed to create chunk file: {:?}", chunk_path))?;
-            
-            chunk_file.write_all(chunk.as_bytes())
+
+            chunk_file
+                .write_all(chunk.as_bytes())
                 .context(format!("Failed to write to chunk file: {:?}", chunk_path))?;
-            
-            info!("Generated chunk file {} of {}: {:?}", chunk_number, 
-                  (content.len() + self.max_file_size - 1) / self.max_file_size, 
-                  chunk_path);
-            
+
+            info!(
+                "Generated chunk file {} of {}: {:?}",
+                chunk_number,
+                (content.len() + self.max_file_size - 1) / self.max_file_size,
+                chunk_path
+            );
+
             start_idx = end_idx;
             chunk_number += 1;
         }
-        
+
         info!("Content was split into {} chunks", chunk_number - 1);
         Ok(())
     }
-    
+
     /// Generate JSON output
     fn generate_json(&self, output_dir: &Path, openapi: &OpenAPI) -> Result<()> {
         // Serialize the OpenAPI document to JSON
         let json = serde_json::to_string_pretty(openapi)
             .context("Failed to serialize OpenAPI document to JSON")?;
-        
+
         // Write the JSON to a file, splitting if necessary
         self.write_chunked_file(output_dir, "openapi", &json, "json")?;
-        
+
         info!("Generated OpenAPI JSON output");
         Ok(())
     }
-    
+
     /// Generate YAML output
     fn generate_yaml(&self, output_dir: &Path, openapi: &OpenAPI) -> Result<()> {
         // Serialize the OpenAPI document to YAML
         let yaml = serde_yaml::to_string(openapi)
             .context("Failed to serialize OpenAPI document to YAML")?;
-        
+
         // Write the YAML to a file, splitting if necessary
         self.write_chunked_file(output_dir, "openapi", &yaml, "yaml")?;
-        
+
         info!("Generated OpenAPI YAML output");
         Ok(())
     }
-    
+
     /// Generate Go output (docs.go)
     fn generate_go(&self, output_dir: &Path, openapi: &OpenAPI) -> Result<()> {
         // Convert openapi to JSON string (no pretty print for docs.go)
         let json = serde_json::to_string(openapi)
             .context("Failed to serialize OpenAPI document to JSON")?;
-        
+
         // Escape JSON for Go template
         let escaped_json = json.replace("\\", "\\\\").replace("\"", "\\\"");
-        
+
         // Create docs.go file content
         let mut content = String::new();
         content.push_str("// Code generated by swaggo-rust; DO NOT EDIT.\n");
@@ -408,7 +440,7 @@ impl Generator {
         content.push_str("\t\"text/template\"\n\n");
         content.push_str("\t\"github.com/swaggo/swag\"\n");
         content.push_str(")\n\n");
-        
+
         // Check if we need to split the JSON content
         if escaped_json.len() <= self.max_file_size {
             // Regular single file approach
@@ -443,7 +475,8 @@ impl Generator {
             content.push_str("\t// Read all chunk files and concatenate them\n");
             content.push_str("\tfiles, err := ioutil.ReadDir(chunkDir)\n");
             content.push_str("\tif err != nil {\n");
-            content.push_str("\t\tpanic(\"Failed to read docs-split directory: \" + err.Error())\n");
+            content
+                .push_str("\t\tpanic(\"Failed to read docs-split directory: \" + err.Error())\n");
             content.push_str("\t}\n\n");
             content.push_str("\t// Find and sort the chunk files\n");
             content.push_str("\tfor _, file := range files {\n");
@@ -460,30 +493,30 @@ impl Generator {
             content.push_str("\t// Combine all chunks\n");
             content.push_str("\treturn strings.Join(docChunks, \"\")\n");
             content.push_str("}\n\n");
-            
+
             // Use a function to load the doc content
             content.push_str("func getDoc() string {\n");
             content.push_str("\treturn loadDocChunks()\n");
             content.push_str("}\n\n");
         }
-        
+
         // SwaggerInfo struct
         content.push_str("type swaggerInfo struct {\n");
         content.push_str("\tVersion     string\n");
         content.push_str("\tTitle       string\n");
         content.push_str("\tDescription string\n");
-        
+
         // For OpenAPI 3, we use servers instead of host/basePath/schemes
         content.push_str("\tHost        string\n");
         content.push_str("\tBasePath    string\n");
         content.push_str("\tSchemes     []string\n");
         content.push_str("}\n\n");
-        
+
         // SwaggerInfo variable
         content.push_str("// SwaggerInfo holds exported Swagger Info so clients can modify it\n");
         content.push_str("var SwaggerInfo = swaggerInfo{\n");
         content.push_str(&format!("\tVersion:     \"{}\",\n", openapi.info.version));
-        
+
         // For OpenAPI 3, we derive host/basePath/schemes from the servers array
         let (host, base_path, schemes) = if let Some(servers) = &openapi.servers {
             if let Some(server) = servers.first() {
@@ -503,36 +536,44 @@ impl Generator {
         } else {
             (String::new(), String::new(), Vec::new())
         };
-        
+
         content.push_str(&format!("\tHost:        \"{}\",\n", host));
         content.push_str(&format!("\tBasePath:    \"{}\",\n", base_path));
-        
+
         // Schemes array
         content.push_str("\tSchemes:     []string{");
-        let schemes_str = schemes.iter()
+        let schemes_str = schemes
+            .iter()
             .map(|s| format!("\"{}\"", s))
             .collect::<Vec<_>>()
             .join(", ");
         content.push_str(&schemes_str);
         content.push_str("},\n");
-        
+
         content.push_str(&format!("\tTitle:       \"{}\",\n", openapi.info.title));
-        
+
         // Description might contain newlines, escape them
-        let description = openapi.info.description.as_deref().unwrap_or("")
+        let description = openapi
+            .info
+            .description
+            .as_deref()
+            .unwrap_or("")
             .replace("\n", "\\n");
         content.push_str(&format!("\tDescription: \"{}\",\n", description));
         content.push_str("}\n\n");
-        
+
         // Reader struct and methods
         content.push_str("type s struct{}\n\n");
         content.push_str("func (s *s) ReadDoc() string {\n");
         content.push_str("\tsInfo := SwaggerInfo\n");
-        content.push_str("\tsInfo.Description = strings.Replace(sInfo.Description, \"\\n\", \"\\\\n\", -1)\n\n");
-        
+        content.push_str(
+            "\tsInfo.Description = strings.Replace(sInfo.Description, \"\\n\", \"\\\\n\", -1)\n\n",
+        );
+
         // Adjust the ReadDoc function based on whether we're using chunked files
         if escaped_json.len() <= self.max_file_size {
-            content.push_str("\tt, err := template.New(\"swagger_info\").Funcs(template.FuncMap{\n");
+            content
+                .push_str("\tt, err := template.New(\"swagger_info\").Funcs(template.FuncMap{\n");
             content.push_str("\t\t\"marshal\": func(v interface{}) string {\n");
             content.push_str("\t\t\ta, _ := json.Marshal(v)\n");
             content.push_str("\t\t\treturn string(a)\n");
@@ -547,7 +588,8 @@ impl Generator {
             content.push_str("\t}).Parse(doc)\n");
         } else {
             content.push_str("\tdocStr := getDoc()\n");
-            content.push_str("\tt, err := template.New(\"swagger_info\").Funcs(template.FuncMap{\n");
+            content
+                .push_str("\tt, err := template.New(\"swagger_info\").Funcs(template.FuncMap{\n");
             content.push_str("\t\t\"marshal\": func(v interface{}) string {\n");
             content.push_str("\t\t\ta, _ := json.Marshal(v)\n");
             content.push_str("\t\t\treturn string(a)\n");
@@ -561,7 +603,7 @@ impl Generator {
             content.push_str("\t\t},\n");
             content.push_str("\t}).Parse(docStr)\n");
         }
-        
+
         content.push_str("\tif err != nil {\n");
         if escaped_json.len() <= self.max_file_size {
             content.push_str("\t\treturn doc\n");
@@ -579,38 +621,40 @@ impl Generator {
         content.push_str("\t}\n\n");
         content.push_str("\treturn tpl.String()\n");
         content.push_str("}\n\n");
-        
+
         // Init function
         content.push_str("func init() {\n");
         content.push_str("\tswag.Register(\"swagger\", &s{})\n");
         content.push_str("}\n");
-        
+
         // Write the content to a file
         let go_path = output_dir.join("docs.go");
-        let mut file = File::create(&go_path)
-            .context(format!("Failed to create file: {:?}", go_path))?;
-        
+        let mut file =
+            File::create(&go_path).context(format!("Failed to create file: {:?}", go_path))?;
+
         file.write_all(content.as_bytes())
             .context(format!("Failed to write to file: {:?}", go_path))?;
-        
+
         // If we need to split the JSON, also write the chunked JSON files
         if escaped_json.len() > self.max_file_size {
             let chunked_dir = output_dir.join("docs-split");
-            fs::create_dir_all(&chunked_dir)
-                .context(format!("Failed to create directory for chunked files: {:?}", chunked_dir))?;
-            
+            fs::create_dir_all(&chunked_dir).context(format!(
+                "Failed to create directory for chunked files: {:?}",
+                chunked_dir
+            ))?;
+
             // Write the JSON chunks
             self.write_chunked_file(&chunked_dir, "openapi", &json, "json")?;
         }
-        
+
         info!("Generated Go file: {:?}", go_path);
         Ok(())
     }
-    
+
     /// Generate Swagger UI HTML template for Go applications
     fn generate_swagger_ui(&self, output_dir: &Path) -> Result<()> {
         let html_path = output_dir.join("swagger-ui.html");
-        
+
         let html_content = r###"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -759,12 +803,12 @@ impl Generator {
 </body>
 </html>"###;
 
-        let mut file = File::create(&html_path)
-            .context(format!("Failed to create file: {:?}", html_path))?;
-        
+        let mut file =
+            File::create(&html_path).context(format!("Failed to create file: {:?}", html_path))?;
+
         file.write_all(html_content.as_bytes())
             .context(format!("Failed to write to file: {:?}", html_path))?;
-        
+
         info!("Generated Swagger UI HTML: {:?}", html_path);
         Ok(())
     }
@@ -772,7 +816,7 @@ impl Generator {
     /// Generate Go template for serving Swagger UI
     fn generate_swagger_handler(&self, output_dir: &Path) -> Result<()> {
         let handler_path = output_dir.join("swagger_handler.go");
-        
+
         let handler_content = r###"// Code generated by swaggo-rust; DO NOT EDIT.
 package docs
 
@@ -1014,10 +1058,10 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
 
         let mut file = File::create(&handler_path)
             .context(format!("Failed to create file: {:?}", handler_path))?;
-        
+
         file.write_all(handler_content.as_bytes())
             .context(format!("Failed to write to file: {:?}", handler_path))?;
-        
+
         info!("Generated Swagger UI handler: {:?}", handler_path);
         Ok(())
     }
@@ -1031,32 +1075,32 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
             tags: self.api_info.tags.clone(),
             ..Default::default()
         };
-        
+
         // Add servers
         if !self.api_info.servers.is_empty() {
             openapi.servers = Some(self.api_info.servers.clone());
         }
-        
+
         // Add global security if any
         if !self.api_info.security.is_empty() {
             openapi.security = self.api_info.security.clone();
         }
-        
+
         // Add external docs if any
         if let Some(ref docs) = self.api_info.external_docs {
             openapi.externalDocs = Some(docs.clone());
         }
-        
+
         // Process operations
         for operation in &self.operations {
             let path = operation.path.clone();
             let method = operation.method.clone();
-            
+
             // Ensure the path exists
             if !openapi.paths.contains_key(&path) {
                 openapi.paths.insert(path.clone(), PathItem::default());
             }
-            
+
             // Set the operation on the path item
             let path_item = openapi.paths.get_mut(&path).unwrap();
             match method.as_str() {
@@ -1071,7 +1115,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                 _ => {}
             }
         }
-        
+
         // Add components section with schemas
         if !self.schemas.is_empty() {
             let mut components = Components {
@@ -1086,10 +1130,10 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                 callbacks: HashMap::new(),
                 pathItems: HashMap::new(),
             };
-            
+
             // Ensure schemas section exists
             components.ensure_schemas_exists();
-            
+
             openapi.components = Some(components);
         } else if !self.api_info.security_definitions.is_empty() {
             // If we have security definitions but no schemas, still add the components section
@@ -1105,32 +1149,41 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                 callbacks: HashMap::new(),
                 pathItems: HashMap::new(),
             };
-            
+
             // Ensure schemas section exists even if empty
             components.ensure_schemas_exists();
-            
+
             openapi.components = Some(components);
         }
-        
+
         // Ensure all referenced schemas are present in the document
         self.ensure_referenced_schemas_exist(&mut openapi);
-        
+
         openapi
     }
-    
+
     // Add method to ensure all referenced schemas exist in the components
     #[allow(dead_code)]
     fn ensure_referenced_schemas_exist(&self, openapi: &mut OpenAPI) {
         // Create a function to find schema references in an object
         let mut references = HashSet::new();
-        
+
         // Check paths
         for (_, path_item) in &openapi.paths {
             // Check each operation
-            for operation in [&path_item.get, &path_item.post, &path_item.put, 
-                              &path_item.delete, &path_item.options, &path_item.head, 
-                              &path_item.patch, &path_item.trace].iter().filter_map(|&op| op.as_ref()) {
-                
+            for operation in [
+                &path_item.get,
+                &path_item.post,
+                &path_item.put,
+                &path_item.delete,
+                &path_item.options,
+                &path_item.head,
+                &path_item.patch,
+                &path_item.trace,
+            ]
+            .iter()
+            .filter_map(|&op| op.as_ref())
+            {
                 // Check request body
                 if let Some(request_body) = &operation.requestBody {
                     for (_, media_type) in &request_body.content {
@@ -1139,14 +1192,14 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                         }
                     }
                 }
-                
+
                 // Check parameters
                 for param in &operation.parameters {
                     if let Some(schema) = &param.schema {
                         self.collect_references(schema, &mut references);
                     }
                 }
-                
+
                 // Check responses
                 for (_, response) in &operation.responses {
                     for (_, media_type) in &response.content {
@@ -1157,7 +1210,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                 }
             }
         }
-        
+
         // Make sure all referenced schemas exist in components
         if let Some(components) = &mut openapi.components {
             for reference in references {
@@ -1166,50 +1219,54 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                     if !components.schemas.contains_key(model_name) {
                         // If the schema doesn't exist but we have it in our schemas map
                         if let Some(schema) = self.schemas.get(model_name) {
-                            components.schemas.insert(model_name.to_string(), schema.clone());
+                            components
+                                .schemas
+                                .insert(model_name.to_string(), schema.clone());
                         } else {
                             // If we don't have it, create a placeholder
-                            components.schemas.insert(model_name.to_string(), Schema::default());
+                            components
+                                .schemas
+                                .insert(model_name.to_string(), Schema::default());
                         }
                     }
                 }
             }
         }
     }
-    
+
     // Helper to collect references from a schema
     #[allow(dead_code)]
     fn collect_references(&self, schema: &Schema, references: &mut HashSet<String>) {
         if let Some(ref_) = &schema.ref_ {
             references.insert(ref_.clone());
         }
-        
+
         if let Some(items) = &schema.items {
             self.collect_references(items, references);
         }
-        
+
         if let Some(all_of) = &schema.allOf {
             for s in all_of {
                 self.collect_references(s, references);
             }
         }
-        
+
         if let Some(any_of) = &schema.anyOf {
             for s in any_of {
                 self.collect_references(s, references);
             }
         }
-        
+
         if let Some(one_of) = &schema.oneOf {
             for s in one_of {
                 self.collect_references(s, references);
             }
         }
-        
+
         if let Some(not) = &schema.not {
             self.collect_references(not, references);
         }
-        
+
         for (_, prop) in &schema.properties {
             self.collect_references(prop, references);
         }
@@ -1220,4 +1277,4 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
         // Use the new implementation
         self.convert_to_openapi()
     }
-} 
+}

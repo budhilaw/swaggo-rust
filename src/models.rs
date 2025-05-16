@@ -348,7 +348,11 @@ pub struct Schema {
     pub dynamic_ref_: Option<String>,
     #[serde(rename = "$dynamicAnchor", skip_serializing_if = "Option::is_none")]
     pub dynamic_anchor_: Option<String>,
-    #[serde(rename = "$vocabulary", skip_serializing_if = "HashMap::is_empty", default)]
+    #[serde(
+        rename = "$vocabulary",
+        skip_serializing_if = "HashMap::is_empty",
+        default
+    )]
     pub vocabulary_: HashMap<String, bool>,
     #[serde(rename = "$comment", skip_serializing_if = "Option::is_none")]
     pub comment_: Option<String>,
@@ -376,7 +380,7 @@ pub struct Schema {
     pub discriminator: Option<Discriminator>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xml: Option<Xml>,
-    
+
     // JSON Schema validation keywords
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub type_: Option<serde_json::Value>, // Can be a string or array of strings
@@ -396,7 +400,7 @@ pub struct Schema {
     pub minimum: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclusiveMinimum: Option<f64>,
-    
+
     // String validation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub maxLength: Option<u64>,
@@ -404,7 +408,7 @@ pub struct Schema {
     pub minLength: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pattern: Option<String>,
-    
+
     // Array validation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub maxItems: Option<u64>,
@@ -416,7 +420,7 @@ pub struct Schema {
     pub maxContains: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub minContains: Option<u64>,
-    
+
     // Object validation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub maxProperties: Option<u64>,
@@ -432,7 +436,7 @@ pub struct Schema {
     pub additionalProperties: Option<serde_json::Value>, // Can be a boolean or Schema
     #[serde(skip_serializing_if = "Option::is_none")]
     pub propertyNames: Option<Box<Schema>>,
-    
+
     // Composition
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allOf: Option<Vec<Schema>>,
@@ -442,7 +446,7 @@ pub struct Schema {
     pub oneOf: Option<Vec<Schema>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not: Option<Box<Schema>>,
-    
+
     // Array item validation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub items: Option<Box<Schema>>,
@@ -452,11 +456,11 @@ pub struct Schema {
     pub prefixItems: Option<Vec<Schema>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unevaluatedItems: Option<serde_json::Value>, // Can be a boolean or Schema
-    
+
     // Object unevaluated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unevaluatedProperties: Option<serde_json::Value>, // Can be a boolean or Schema
-    
+
     // Conditional schema
     #[serde(skip_serializing_if = "Option::is_none")]
     pub if_: Option<Box<Schema>>,
@@ -464,7 +468,7 @@ pub struct Schema {
     pub then: Option<Box<Schema>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub else_: Option<Box<Schema>>,
-    
+
     // Content validation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contentEncoding: Option<String>,
@@ -593,4 +597,4 @@ impl ParsedApiInfo {
             external_docs: None,
         }
     }
-} 
+}
