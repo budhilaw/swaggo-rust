@@ -1,0 +1,32 @@
+name: Version Check
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  check-version:
+    name: Check Version Match
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        
+      - name: Get tag version
+        id: get_tag_version
+        run: echo "TAG_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        
+      - name: Get Cargo.toml version
+        id: get_cargo_version
+        run: |
+          CARGO_VERSION=$(grep -m 1 'version = ' Cargo.toml | cut -d '"' -f 2)
+          echo "CARGO_VERSION=$CARGO_VERSION" >> $GITHUB_ENV
+          
+      - name: Verify versions match
+        run: |
+          echo "Tag version: ${{ env.TAG_VERSION }}"
+          echo "Cargo version: ${{ env.CARGO_VERSION }}"
+          if [ "${{ env.TAG_VERSION }}" != "${{ env.CARGO_VERSION }}" ]; then
+            echo "Error: Version mismatch between git tag (${{ env.TAG_VERSION }}) and Cargo.toml (${{ env.CARGO_VERSION }})"
+            exit 1
+          fi 
