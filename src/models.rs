@@ -573,6 +573,12 @@ pub struct ParsedApiInfo {
     pub produces: Vec<String>,
 }
 
+impl Default for ParsedApiInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParsedApiInfo {
     pub fn new() -> Self {
         Self {

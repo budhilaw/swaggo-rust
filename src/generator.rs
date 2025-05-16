@@ -164,7 +164,7 @@ impl Generator {
             let path = operation.path.clone();
             let method = operation.method.clone();
 
-            let path_item = openapi.paths.entry(path).or_insert_with(PathItem::default);
+            let path_item = openapi.paths.entry(path).or_default();
 
             // Convert legacy consumes/produces to requestBody/responses content
             let mut op = operation.operation.clone();
@@ -200,7 +200,7 @@ impl Generator {
     /// Fix references in schemas to use the correct format for OpenAPI 3.1.1
     fn fix_schema_references(&self, components: &mut Components) {
         // Fix references in all schemas
-        for (_, schema) in components.schemas.iter_mut() {
+        for schema in components.schemas.values_mut() {
             self.fix_references_in_schema(schema);
         }
     }
@@ -216,7 +216,7 @@ impl Generator {
 
         // Fix references in request body
         if let Some(request_body) = &mut operation.requestBody {
-            for (_, media_type) in request_body.content.iter_mut() {
+            for media_type in request_body.content.values_mut() {
                 if let Some(schema) = &mut media_type.schema {
                     self.fix_references_in_schema(schema);
                 }
@@ -224,8 +224,8 @@ impl Generator {
         }
 
         // Fix references in responses
-        for (_, response) in operation.responses.iter_mut() {
-            for (_, media_type) in response.content.iter_mut() {
+        for response in operation.responses.values_mut() {
+            for media_type in response.content.values_mut() {
                 if let Some(schema) = &mut media_type.schema {
                     self.fix_references_in_schema(schema);
                 }
@@ -253,7 +253,7 @@ impl Generator {
                 debug!("Unknown reference format: {}, attempting to fix", ref_);
                 if ref_.ends_with(".json") || ref_.ends_with(".yaml") {
                     // External file reference, leave it as is
-                } else if let Some(schema_name) = ref_.split('/').last() {
+                } else if let Some(schema_name) = ref_.split('/').next_back() {
                     // Extract the schema name and create a proper reference
                     *ref_ = format!("#/components/schemas/{}", schema_name);
                     debug!("Extracted schema name and reformatted reference: {}", ref_);
@@ -267,7 +267,7 @@ impl Generator {
         }
 
         // Fix references in properties (for objects)
-        for (_, property) in schema.properties.iter_mut() {
+        for property in schema.properties.values_mut() {
             self.fix_references_in_schema(property);
         }
 
@@ -334,9 +334,7 @@ impl Generator {
             "// This file is an index for the chunked {} files\n",
             file_ext
         );
-        index_content.push_str(&format!(
-            "// The content has been split into multiple files due to its large size\n"
-        ));
+        index_content.push_str("// The content has been split into multiple files due to its large size\n");
         index_content.push_str(&format!(
             "// See the '{}-split' directory for the actual content files\n",
             base_filename
@@ -379,7 +377,7 @@ impl Generator {
             info!(
                 "Generated chunk file {} of {}: {:?}",
                 chunk_number,
-                (content.len() + self.max_file_size - 1) / self.max_file_size,
+                content.len().div_ceil(self.max_file_size),
                 chunk_path
             );
 
@@ -1169,7 +1167,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
         let mut references = HashSet::new();
 
         // Check paths
-        for (_, path_item) in &openapi.paths {
+        for path_item in openapi.paths.values() {
             // Check each operation
             for operation in [
                 &path_item.get,
@@ -1186,7 +1184,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
             {
                 // Check request body
                 if let Some(request_body) = &operation.requestBody {
-                    for (_, media_type) in &request_body.content {
+                    for media_type in request_body.content.values() {
                         if let Some(schema) = &media_type.schema {
                             self.collect_references(schema, &mut references);
                         }
@@ -1201,8 +1199,8 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
                 }
 
                 // Check responses
-                for (_, response) in &operation.responses {
-                    for (_, media_type) in &response.content {
+                for response in operation.responses.values() {
+                    for media_type in response.content.values() {
                         if let Some(schema) = &media_type.schema {
                             self.collect_references(schema, &mut references);
                         }
@@ -1267,7 +1265,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
             self.collect_references(not, references);
         }
 
-        for (_, prop) in &schema.properties {
+        for prop in schema.properties.values() {
             self.collect_references(prop, references);
         }
     }

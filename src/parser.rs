@@ -1,9 +1,10 @@
+#![allow(non_snake_case)]
+
 use anyhow::{Context, Result};
 use log::{debug, warn};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::{
@@ -13,7 +14,6 @@ use std::{
 };
 use thiserror::Error;
 
-#[allow(non_snake_case)]
 use crate::models::{
     Contact, ExternalDocs, License, MediaType, OAuthFlows, Operation, Parameter, ParsedApiInfo,
     ParsedOperation, RequestBody, Response, Schema, SecurityScheme, Server,
@@ -30,27 +30,27 @@ static ROUTER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"/(.+?)\s+\[(\w+)]$"
 pub enum ParserError {
     #[error("Failed to read file: {0}")]
     IOError(#[from] std::io::Error),
-
+    
     #[error("Failed to parse annotation: {0}")]
     #[allow(dead_code)]
     AnnotationParseError(String),
-
+    
     #[error("Invalid router format: {0}")]
     RouterParseError(String),
 
     #[error("Invalid parameter format: {0}")]
     ParameterParseError(String),
-
+    
     #[error("Invalid response format: {0}")]
     ResponseParseError(String),
-
+    
     #[error("Invalid security format: {0}")]
     SecurityParseError(String),
-
+    
     #[error("Invalid general API info: {0}")]
     #[allow(dead_code)]
     GeneralApiInfoError(String),
-
+    
     #[error("Invalid server format: {0}")]
     ServerParseError(String),
 }
@@ -65,27 +65,27 @@ pub enum AnnotationType {
     TermsOfService,
     Contact,
     License,
-
+    
     // Servers (OpenAPI 3.x)
     Server,
-
+    
     // Legacy (Swagger 2.0)
     Host,
     BasePath,
     Accept,
     Produce,
     Schemes,
-
+    
     // Tags
     Tag,
-
+    
     // Security
     SecurityDefinitions,
     SecurityScheme,
-
+    
     // External Docs
     ExternalDocs,
-
+    
     // Operation Annotations
     Id,
     Tags,
@@ -97,7 +97,7 @@ pub enum AnnotationType {
     Response,
     Header,
     Deprecated,
-
+    
     // Unknown
     Unknown(String),
 }
@@ -148,6 +148,12 @@ pub struct Annotation {
 
 pub struct GoParser;
 
+impl Default for GoParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ImportInfo {
     pub alias: String,
@@ -155,19 +161,18 @@ pub struct ImportInfo {
     pub file_path: Option<PathBuf>,
 }
 
-#[allow(non_snake_case)]
 impl GoParser {
     pub fn new() -> Self {
         Self
     }
-
+    
     pub fn parse_general_api_info(&self, file_path: impl AsRef<Path>) -> Result<ParsedApiInfo> {
         let file_path = file_path.as_ref();
         debug!("Parsing general API info from file: {:?}", file_path);
-
+        
         let file =
             File::open(file_path).context(format!("Failed to open file: {:?}", file_path))?;
-
+        
         let reader = BufReader::new(file);
         let mut api_info = ParsedApiInfo::new();
         let mut contact = Contact::default();
@@ -176,22 +181,22 @@ impl GoParser {
         let mut description_buffer = String::new();
         let mut current_server: Option<Server> = None;
         let mut current_tag_name: Option<String> = None;
-
+        
         for line in reader.lines() {
             let line = line?;
-
+            
             // Check for comment annotations
             if let Some(captures) = ANNOTATION_REGEX.captures(&line) {
                 let annotation_type_str = captures.get(1).unwrap().as_str();
                 let attribute = captures.get(2).map(|m| m.as_str().to_string());
                 let value = captures.get(3).unwrap().as_str().to_string();
-
+                
                 let annotation = Annotation {
                     annotation_type: AnnotationType::from(annotation_type_str),
                     attribute,
                     value,
                 };
-
+                
                 match annotation.annotation_type {
                     AnnotationType::Title => {
                         api_info.info.title = annotation.value;
@@ -250,7 +255,7 @@ impl GoParser {
                                 "description" => {
                                     if let Some(server) = &mut current_server {
                                         server.description = Some(annotation.value);
-
+                                        
                                         // Add the server to the list and reset
                                         api_info.servers.push(server.clone());
                                         current_server = None;
@@ -302,7 +307,7 @@ impl GoParser {
                             match attribute.as_str() {
                                 "name" => {
                                     current_tag_name = Some(annotation.value.clone());
-
+                                    
                                     // Add the tag with just the name for now
                                     let mut found = false;
                                     for tag in &mut api_info.tags {
@@ -311,7 +316,7 @@ impl GoParser {
                                             break;
                                         }
                                     }
-
+                                    
                                     if !found {
                                         api_info.tags.push(crate::models::Tag {
                                             name: annotation.value,
@@ -364,7 +369,7 @@ impl GoParser {
                             if parts.len() >= 2 {
                                 let scheme_name = parts[0];
                                 let property = parts[1];
-
+                                
                                 if let Some(scheme) =
                                     api_info.security_definitions.get_mut(scheme_name)
                                 {
@@ -394,7 +399,7 @@ impl GoParser {
                         // Format: [name] [scopes...]
                         let parts: Vec<&str> = annotation.value.splitn(2, ' ').collect();
                         let security_name = parts[0];
-
+                        
                         let mut security_requirement = std::collections::HashMap::new();
                         if parts.len() > 1 {
                             let scopes: Vec<String> =
@@ -403,7 +408,7 @@ impl GoParser {
                         } else {
                             security_requirement.insert(security_name.to_string(), Vec::new());
                         }
-
+                        
                         api_info.security.push(security_requirement);
                     }
                     AnnotationType::ExternalDocs => {
@@ -449,13 +454,13 @@ impl GoParser {
                     in_doc_comment = false;
                 }
             }
-
+            
             // Check if we're starting a doc comment block
             if line.trim_start().starts_with("/*") {
                 in_doc_comment = true;
                 description_buffer.clear();
             }
-
+            
             // Check if we're ending a doc comment block
             if line.trim_end().ends_with("*/") {
                 in_doc_comment = false;
@@ -465,24 +470,24 @@ impl GoParser {
                 }
             }
         }
-
+        
         // Add contact info if any fields were set
         if contact.name.is_some() || contact.url.is_some() || contact.email.is_some() {
             api_info.info.contact = Some(contact);
         }
-
+        
         // Add license info if the name was set
         if license.name != String::new() {
             api_info.info.license = Some(license);
         }
-
+        
         // Add the current server if there is one
         if let Some(server) = current_server {
             if !server.url.is_empty() {
                 api_info.servers.push(server);
             }
         }
-
+        
         // Create a default server from legacy host/basePath/schemes if no servers were defined
         if api_info.servers.is_empty() && api_info.host.is_some() {
             for scheme in &api_info.schemes {
@@ -492,7 +497,7 @@ impl GoParser {
                     api_info.host.as_ref().unwrap(),
                     api_info.base_path.as_deref().unwrap_or("")
                 );
-
+                
                 api_info.servers.push(Server {
                     url,
                     description: None,
@@ -500,10 +505,10 @@ impl GoParser {
                 });
             }
         }
-
+        
         Ok(api_info)
     }
-
+    
     fn parse_security_definition(
         &self,
         api_info: &mut ParsedApiInfo,
@@ -514,15 +519,15 @@ impl GoParser {
             "Parsing security definition attribute: '{}' with value: '{}'",
             attribute, value
         );
-
+        
         let parts: Vec<&str> = attribute.split('.').collect();
         let first_part = parts[0].to_lowercase();
-
+        
         // Handle security scheme property updates (apikey.in, apikey.name, etc.)
         if parts.len() >= 2 {
             let security_type = parts[0].to_lowercase();
             let sub_part = parts.get(1).unwrap().to_string();
-
+            
             // Handle apikey.in, apikey.name, apikey.description
             if security_type == "apikey" && api_info.security_definitions.contains_key(value) {
                 if parts.len() >= 2 {
@@ -549,7 +554,7 @@ impl GoParser {
             // Handle updating existing ApiKeyAuth scheme
             else if security_type == "apikey" && parts.len() >= 2 {
                 let property = sub_part.as_str();
-
+                
                 if let Some(scheme) = api_info.security_definitions.get_mut("ApiKeyAuth") {
                     match property {
                         "in" => {
@@ -572,7 +577,7 @@ impl GoParser {
             else if security_type == "oauth2" && parts.len() >= 3 {
                 let flow_type = sub_part.as_str();
                 let property = parts.get(2).unwrap().to_string();
-
+                
                 // Check if we have an OAuth2 scheme
                 if let Some(scheme) = api_info.security_definitions.get_mut("OAuth2") {
                     if let Some(ref mut flows) = scheme.flows {
@@ -627,7 +632,7 @@ impl GoParser {
                                     {
                                         clientCredentials.refreshUrl = Some(value.to_string());
                                         return Ok(());
-                                    }
+                                    } 
                                 } else if flow_type == "authorizationcode"
                                     || flow_type == "accesscode"
                                 {
@@ -641,7 +646,7 @@ impl GoParser {
                             "scopes" => {
                                 if parts.len() >= 4 {
                                     let scope_name = parts[3].to_string();
-
+                                    
                                     if flow_type == "implicit" {
                                         if let Some(ref mut implicit) = flows.implicit {
                                             implicit.scopes.insert(scope_name, value.to_string());
@@ -735,7 +740,7 @@ impl GoParser {
                                     {
                                         clientCredentials.refreshUrl = Some(value.to_string());
                                         return Ok(());
-                                    }
+                                    } 
                                 } else if flow_type == "authorizationcode"
                                     || flow_type == "accesscode"
                                 {
@@ -749,7 +754,7 @@ impl GoParser {
                             "scopes" => {
                                 if parts.len() >= 4 {
                                     let scope_name = parts[3].to_string();
-
+                                    
                                     if flow_type == "implicit" {
                                         if let Some(ref mut implicit) = flows.implicit {
                                             implicit.scopes.insert(scope_name, value.to_string());
@@ -791,7 +796,7 @@ impl GoParser {
                 }
             }
         }
-
+        
         // Handle direct security type definitions (@securityDefinitions.apikey)
         match first_part.as_str() {
             "apikey" => {
@@ -852,7 +857,7 @@ impl GoParser {
                 if parts.len() >= 2 {
                     let flow_type = parts[1];
                     let mut oauth_flows = OAuthFlows::default();
-
+                    
                     // Create different flows based on the type
                     match flow_type {
                         "implicit" => {
@@ -886,7 +891,7 @@ impl GoParser {
                             )));
                         }
                     }
-
+                    
                     api_info.security_definitions.insert(
                         value.to_string(),
                         SecurityScheme {
@@ -927,7 +932,7 @@ impl GoParser {
             }
             _ => {}
         }
-
+        
         // If we get here and parts.len() < 2, it's an error
         if parts.len() < 2 {
             return Err(ParserError::SecurityParseError(format!(
@@ -935,10 +940,10 @@ impl GoParser {
                 attribute
             )));
         }
-
+        
         Ok(())
     }
-
+    
     #[allow(non_snake_case)]
     pub fn parse_operations(
         &self,
@@ -948,7 +953,7 @@ impl GoParser {
     ) -> Result<(Vec<ParsedOperation>, HashMap<String, Schema>)> {
         let mut operations = Vec::new();
         let mut all_file_paths = Vec::new();
-
+        
         // First, collect all .go files in the specified directories recursively
         for dir in directories {
             // Make sure we're handling relative paths correctly
@@ -959,12 +964,12 @@ impl GoParser {
             };
 
             debug!("Scanning for Go files in directory: {}", dir_path.display());
-
+            
             self.collect_go_files_recursively(&dir_path, excluded_dirs, &mut all_file_paths);
         }
-
+        
         debug!("Found {} Go files to parse", all_file_paths.len());
-
+        
         // Extract examples from structs with import resolution
         let struct_examples =
             self.extract_struct_examples_with_imports(&all_file_paths, base_dir.as_ref());
@@ -975,24 +980,24 @@ impl GoParser {
 
         // Collect all model references from operations we find
         let mut referenced_models = HashSet::new();
-
+        
         // Now parse all files for operations
         for file_path in &all_file_paths {
             if let Ok(content) = std::fs::read_to_string(file_path) {
                 let mut current_annotations: Vec<Annotation> = Vec::new();
-
+                
                 for line in content.lines() {
                     if let Some(captures) = ANNOTATION_REGEX.captures(line) {
                         let annotation_type_str = captures.get(1).unwrap().as_str();
                         let attribute = captures.get(2).map(|m| m.as_str().to_string());
                         let value = captures.get(3).unwrap().as_str().to_string();
-
+                        
                         let annotation = Annotation {
                             annotation_type: AnnotationType::from(annotation_type_str),
                             attribute,
                             value,
                         };
-
+                        
                         current_annotations.push(annotation);
                     } else if line.trim().starts_with("func ") && !current_annotations.is_empty() {
                         // Function encountered, process the collected annotations
@@ -1019,7 +1024,7 @@ impl GoParser {
                                 Err(e) => warn!("Failed to parse operation: {}", e),
                             }
                         }
-
+                        
                         current_annotations.clear();
                     }
                 }
@@ -1040,7 +1045,7 @@ impl GoParser {
             "Extracted schemas for {} referenced models",
             struct_schemas.len()
         );
-
+        
         Ok((operations, struct_schemas))
     }
 
@@ -1059,7 +1064,7 @@ impl GoParser {
 
         // Check request body
         if let Some(req_body) = &operation.operation.requestBody {
-            for (_, media_type) in &req_body.content {
+            for media_type in req_body.content.values() {
                 if let Some(schema) = &media_type.schema {
                     self.collect_schema_references(schema, referenced_models);
                 }
@@ -1067,8 +1072,8 @@ impl GoParser {
         }
 
         // Check responses
-        for (_, response) in &operation.operation.responses {
-            for (_, media_type) in &response.content {
+        for response in operation.operation.responses.values() {
+            for media_type in response.content.values() {
                 if let Some(schema) = &media_type.schema {
                     self.collect_schema_references(schema, referenced_models);
                 }
@@ -1116,7 +1121,7 @@ impl GoParser {
         }
 
         // Check properties
-        for (_, property) in &schema.properties {
+        for property in schema.properties.values() {
             self.collect_schema_references(property, references);
         }
 
@@ -1177,7 +1182,7 @@ impl GoParser {
 
                         // Also add the bare model name without package prefix
                         if model_name.contains('.') {
-                            if let Some(base_name) = model_name.split('.').last() {
+                            if let Some(base_name) = model_name.split('.').next_back() {
                                 referenced_models.insert(base_name.to_string());
                             }
                         }
@@ -1192,7 +1197,7 @@ impl GoParser {
 
                         // Also add the bare model name without package prefix
                         if model_name.contains('.') {
-                            if let Some(base_name) = model_name.split('.').last() {
+                            if let Some(base_name) = model_name.split('.').next_back() {
                                 referenced_models.insert(base_name.to_string());
                             }
                         }
@@ -1207,7 +1212,7 @@ impl GoParser {
 
                         // Also add the bare model name without package prefix
                         if model_name.contains('.') {
-                            if let Some(base_name) = model_name.split('.').last() {
+                            if let Some(base_name) = model_name.split('.').next_back() {
                                 referenced_models.insert(base_name.to_string());
                             }
                         }
@@ -1219,7 +1224,7 @@ impl GoParser {
         debug!("Found referenced models: {:?}", referenced_models);
         referenced_models
     }
-
+    
     // Helper method to recursively collect Go files in a directory and its subdirectories
     fn collect_go_files_recursively(
         &self,
@@ -1228,7 +1233,7 @@ impl GoParser {
         file_paths: &mut Vec<PathBuf>,
     ) {
         use walkdir::WalkDir;
-
+        
         // Convert excluded directories to absolute paths for easier comparison
         let excluded_paths: Vec<PathBuf> = excluded_dirs
             .iter()
@@ -1266,23 +1271,23 @@ impl GoParser {
                 continue;
             }
 
-            if path.extension().map_or(false, |ext| ext == "go") {
+            if path.extension().is_some_and(|ext| ext == "go") {
                 debug!("Found Go file: {:?}", path);
                 file_paths.push(path.to_path_buf());
             }
         }
     }
-
+    
     fn parse_operation_with_examples(
-        &self,
-        annotations: &[Annotation],
+        &self, 
+        annotations: &[Annotation], 
         struct_examples: &HashMap<String, HashMap<String, serde_json::Value>>,
     ) -> Result<ParsedOperation, ParserError> {
         let mut operation = Operation::default();
         let mut path = String::new();
         let mut method = String::new();
         let mut request_body_schema_ref: Option<String> = None;
-
+        
         for annotation in annotations {
             match &annotation.annotation_type {
                 AnnotationType::Id => {
@@ -1300,14 +1305,14 @@ impl GoParser {
                         .split(',')
                         .map(|s| s.trim())
                         .for_each(|tag| {
-                            operation.tags.push(tag.to_string());
-                        });
+                        operation.tags.push(tag.to_string());
+                    });
                 }
                 AnnotationType::Router | AnnotationType::DeprecatedRouter => {
                     if let Some(captures) = ROUTER_REGEX.captures(&annotation.value) {
                         path = format!("/{}", captures.get(1).unwrap().as_str());
                         method = captures.get(2).unwrap().as_str().to_lowercase();
-
+                        
                         // Mark as deprecated if using deprecated router
                         if let AnnotationType::DeprecatedRouter = annotation.annotation_type {
                             operation.deprecated = Some(true);
@@ -1326,23 +1331,23 @@ impl GoParser {
                         .split(',')
                         .map(|s| s.trim())
                         .for_each(|media_type| {
-                            let normalized_type = self.normalize_mime_type(media_type);
-                            operation.consumes.push(normalized_type.clone());
-
-                            if operation.requestBody.is_none() {
-                                operation.requestBody = Some(RequestBody {
-                                    description: None,
-                                    content: HashMap::new(),
-                                    required: Some(true),
-                                });
-                            }
-
-                            if let Some(ref mut request_body) = operation.requestBody {
+                        let normalized_type = self.normalize_mime_type(media_type);
+                        operation.consumes.push(normalized_type.clone());
+                        
+                        if operation.requestBody.is_none() {
+                            operation.requestBody = Some(RequestBody {
+                                description: None,
+                                content: HashMap::new(),
+                                required: Some(true),
+                            });
+                        }
+                        
+                        if let Some(ref mut request_body) = operation.requestBody {
                                 request_body
                                     .content
                                     .insert(normalized_type, MediaType::default());
-                            }
-                        });
+                        }
+                    });
                 }
                 AnnotationType::Produce => {
                     // Store media types for later use in responses
@@ -1351,9 +1356,9 @@ impl GoParser {
                         .split(',')
                         .map(|s| s.trim())
                         .for_each(|media_type| {
-                            let normalized_type = self.normalize_mime_type(media_type);
-                            operation.produces.push(normalized_type);
-                        });
+                        let normalized_type = self.normalize_mime_type(media_type);
+                        operation.produces.push(normalized_type);
+                    });
                 }
                 AnnotationType::Param => {
                     match self.parse_parameter(&annotation.value) {
@@ -1364,8 +1369,8 @@ impl GoParser {
                                     if let Some(ref schema) = parameter.schema {
                                         if let Some(ref_) = &schema.ref_ {
                                             // Extract model name for later use with examples
-                                            let model_name =
-                                                ref_.split('/').last().unwrap_or("").to_string();
+                                                                                            let model_name =
+                                                ref_.split('/').next_back().unwrap_or("").to_string();
                                             request_body_schema_ref = Some(model_name);
                                         } else if let Some(type_value) = &schema.type_ {
                                             // If it's a direct type reference
@@ -1413,7 +1418,7 @@ impl GoParser {
                                         if let Some(ref_str) = schema_ref {
                                             // Extract the model name from the reference
                                             let model_name =
-                                                ref_str.split('/').last().unwrap_or("").to_string();
+                                                ref_str.split('/').next_back().unwrap_or("").to_string();
                                             debug!(
                                                 "Looking for examples for model: {}",
                                                 model_name
@@ -1426,7 +1431,7 @@ impl GoParser {
                                                 if model_name.contains('.') {
                                                     model_name
                                                         .split('.')
-                                                        .last()
+                                                        .next_back()
                                                         .unwrap_or("")
                                                         .to_string()
                                                 } else {
@@ -1461,7 +1466,7 @@ impl GoParser {
                                     }
                                 }
                             }
-
+                            
                             // Add parameter to the operation (except 'body' parameters in OpenAPI 3)
                             if parameter.in_type != "body" {
                                 operation.parameters.push(parameter);
@@ -1481,13 +1486,13 @@ impl GoParser {
                             required: Some(true),
                         });
                     }
-
+                    
                     // Check if the annotation value contains a model reference
                     if annotation.value.contains("{") && annotation.value.contains("}") {
                         let start = annotation.value.find("{").unwrap();
                         let end = annotation.value.find("}").unwrap();
                         let model_type = &annotation.value[start + 1..end];
-
+                        
                         // Parse model type, looking for "object ModelName"
                         let parts: Vec<&str> = model_type.split_whitespace().collect();
                         if parts.len() >= 2 && parts[0] == "object" {
@@ -1512,12 +1517,12 @@ impl GoParser {
                             }
 
                             // Set examples for each response media type
-                            for (_content_type, media_type) in &mut response.content {
+                            for media_type in response.content.values_mut() {
                                 if let Some(schema) = &media_type.schema {
                                     // Try to find examples if we have a schema reference
-                                    if let Some(ref_) = &schema.ref_ {
+                                if let Some(ref_) = &schema.ref_ {
                                         // Extract the model name from the reference
-                                        let full_type_name = ref_.split('/').last().unwrap_or("");
+                                        let full_type_name = ref_.split('/').next_back().unwrap_or("");
                                         debug!(
                                             "Looking for response examples for model: {}",
                                             full_type_name
@@ -1529,7 +1534,7 @@ impl GoParser {
                                             if full_type_name.contains('.') {
                                                 full_type_name
                                                     .split('.')
-                                                    .last()
+                                                    .next_back()
                                                     .unwrap_or("")
                                                     .to_string()
                                             } else {
@@ -1554,7 +1559,7 @@ impl GoParser {
                                                         "Setting example for response: {:?}",
                                                         example_value
                                                     );
-                                                    media_type.example = Some(example_value);
+                                                media_type.example = Some(example_value);
                                                     break;
                                                 }
                                             }
@@ -1564,7 +1569,7 @@ impl GoParser {
                                     else if let Some(items) = &schema.items {
                                         if let Some(ref_) = &items.ref_ {
                                             let item_type_name =
-                                                ref_.split('/').last().unwrap_or("");
+                                                ref_.split('/').next_back().unwrap_or("");
                                             debug!("Looking for response array item examples for model: {}", item_type_name);
 
                                             let possible_names = vec![
@@ -1572,7 +1577,7 @@ impl GoParser {
                                                 if item_type_name.contains('.') {
                                                     item_type_name
                                                         .split('.')
-                                                        .last()
+                                                        .next_back()
                                                         .unwrap_or("")
                                                         .to_string()
                                                 } else {
@@ -1607,7 +1612,7 @@ impl GoParser {
                                     }
                                 }
                             }
-
+                            
                             operation.responses.insert(response.code.clone(), response);
                         }
                         Err(e) => {
@@ -1618,7 +1623,7 @@ impl GoParser {
                 AnnotationType::Security => {
                     let mut security_requirement = HashMap::new();
                     let parts: Vec<&str> = annotation.value.split_whitespace().collect();
-
+                    
                     if !parts.is_empty() {
                         let security_name = parts[0];
                         let scopes: Vec<String> =
@@ -1632,14 +1637,14 @@ impl GoParser {
                 }
             }
         }
-
+        
         // Add examples to request body if we have a schema reference
         if let Some(model_name) = request_body_schema_ref {
             // Try to find examples for this model or split the model name if it has a package prefix
             let possible_model_names = vec![
                 model_name.clone(),
                 if model_name.contains('.') {
-                    model_name.split('.').last().unwrap_or("").to_string()
+                    model_name.split('.').next_back().unwrap_or("").to_string()
                 } else {
                     model_name.clone()
                 },
@@ -1649,49 +1654,49 @@ impl GoParser {
                 if let Some(examples) = struct_examples.get(&possible_name) {
                     let example_value =
                         serde_json::to_value(examples).unwrap_or(serde_json::Value::Null);
-                    if !example_value.is_null() {
-                        // Ensure we have a request body
-                        if operation.requestBody.is_none() {
-                            operation.requestBody = Some(RequestBody {
-                                description: None,
-                                content: HashMap::new(),
-                                required: Some(true),
+                if !example_value.is_null() {
+                    // Ensure we have a request body
+                    if operation.requestBody.is_none() {
+                        operation.requestBody = Some(RequestBody {
+                            description: None,
+                            content: HashMap::new(),
+                            required: Some(true),
+                        });
+                    }
+                    
+                    // Add example to all content types or add application/json if none
+                    if let Some(ref mut request_body) = operation.requestBody {
+                        if request_body.content.is_empty() {
+                            let mut media_type = MediaType::default();
+                            media_type.example = Some(example_value.clone());
+                            media_type.schema = Some(Schema {
+                                ref_: Some(format!("#/components/schemas/{}", model_name)),
+                                ..Default::default()
                             });
-                        }
-
-                        // Add example to all content types or add application/json if none
-                        if let Some(ref mut request_body) = operation.requestBody {
-                            if request_body.content.is_empty() {
-                                let mut media_type = MediaType::default();
-                                media_type.example = Some(example_value.clone());
-                                media_type.schema = Some(Schema {
-                                    ref_: Some(format!("#/components/schemas/{}", model_name)),
-                                    ..Default::default()
-                                });
                                 request_body
                                     .content
                                     .insert("application/json".to_string(), media_type);
-                            } else {
-                                for (_content_type, media_type) in request_body.content.iter_mut() {
-                                    media_type.example = Some(example_value.clone());
-                                    if media_type.schema.is_none() {
-                                        media_type.schema = Some(Schema {
+                        } else {
+                            for (_content_type, media_type) in request_body.content.iter_mut() {
+                                media_type.example = Some(example_value.clone());
+                                if media_type.schema.is_none() {
+                                    media_type.schema = Some(Schema {
                                             ref_: Some(format!(
                                                 "#/components/schemas/{}",
                                                 model_name
                                             )),
-                                            ..Default::default()
-                                        });
-                                    }
+                                        ..Default::default()
+                                    });
                                 }
                             }
+                        }
                         }
                         break;
                     }
                 }
             }
         }
-
+        
         // Generate operation ID if not provided
         if operation.operationId.is_none() {
             let operation_id = match method.as_str() {
@@ -1706,11 +1711,11 @@ impl GoParser {
             };
             operation.operationId = Some(operation_id);
         }
-
+        
         // If we have no produces but have responses, add a default content type
         if operation.produces.is_empty() && !operation.responses.is_empty() {
             operation.produces.push("application/json".to_string());
-
+            
             // Add the content type to all responses that don't have content
             for (_, response) in operation.responses.iter_mut() {
                 if response.content.is_empty() {
@@ -1720,14 +1725,14 @@ impl GoParser {
                 }
             }
         }
-
+        
         Ok(ParsedOperation {
             path,
             method,
             operation,
         })
     }
-
+    
     // Add a new method to extract imports from a file
     fn extract_imports(&self, file_content: &str) -> Vec<ImportInfo> {
         let mut imports = Vec::new();
@@ -1744,7 +1749,7 @@ impl GoParser {
                             || {
                                 // If no alias, use the last part of the path
                                 let path = m.get(2).unwrap().as_str();
-                                path.split('/').last().unwrap_or(path).to_string()
+                                path.split('/').next_back().unwrap_or(path).to_string()
                             },
                             |a| a.as_str().to_string(),
                         );
@@ -1764,7 +1769,7 @@ impl GoParser {
                     || {
                         // If no alias, use the last part of the path
                         let path = caps.get(2).unwrap().as_str();
-                        path.split('/').last().unwrap_or(path).to_string()
+                        path.split('/').next_back().unwrap_or(path).to_string()
                     },
                     |a| a.as_str().to_string(),
                 );
@@ -1962,7 +1967,7 @@ impl GoParser {
                         for entry in std::fs::read_dir(file_path).ok().into_iter().flatten() {
                             if let Ok(entry) = entry {
                                 let path = entry.path();
-                                if path.extension().map_or(false, |ext| ext == "go") {
+                                if path.extension().is_some_and(|ext| ext == "go") {
                                     if let Ok(content) = std::fs::read_to_string(&path) {
                                         if model_regex.is_match(&content) {
                                             debug!("Found model {} in file {:?}", model_name, path);
@@ -1989,11 +1994,11 @@ impl GoParser {
         let mut struct_examples: HashMap<String, HashMap<String, serde_json::Value>> =
             HashMap::new();
         let imported_models_cache = Arc::new(Mutex::new(HashMap::<String, PathBuf>::new()));
-
+        
         // Regular expressions for struct parsing
         let struct_regex = Regex::new(r"type\s+(\w+)\s+struct\s*\{").unwrap();
         let field_regex = Regex::new(r#"^\s*(\w+)\s+\w+\s+`[^`]*example:"([^"]*)"`"#).unwrap();
-
+        
         for file_path in file_paths {
             if let Ok(content) = std::fs::read_to_string(file_path) {
                 // Extract imports from this file
@@ -2003,23 +2008,23 @@ impl GoParser {
                 // First pass: collect all local struct examples
                 let mut i = 0;
                 let lines: Vec<&str> = content.lines().collect();
-
+                
                 while i < lines.len() {
                     if let Some(captures) = struct_regex.captures(lines[i]) {
                         let struct_name = captures.get(1).unwrap().as_str();
                         debug!("Found struct: {}", struct_name);
-
+                        
                         let mut field_examples = HashMap::new();
                         let mut j = i + 1;
-
+                        
                         // Parse fields until we reach the closing brace
                         while j < lines.len() && !lines[j].trim().starts_with("}") {
                             if let Some(field_captures) = field_regex.captures(lines[j]) {
                                 let field_name = field_captures.get(1).unwrap().as_str();
                                 let example_value = field_captures.get(2).unwrap().as_str();
-
+                                
                                 debug!("  Field: {} with example: {}", field_name, example_value);
-
+                                
                                 // Try to parse as JSON
                                 let json_value = if let Ok(json) =
                                     serde_json::from_str::<serde_json::Value>(example_value)
@@ -2032,16 +2037,16 @@ impl GoParser {
                                 } else {
                                     serde_json::Value::String(example_value.to_string())
                                 };
-
+                                
                                 field_examples.insert(field_name.to_string(), json_value);
                             }
                             j += 1;
                         }
-
+                        
                         if !field_examples.is_empty() {
                             struct_examples.insert(struct_name.to_string(), field_examples);
                         }
-
+                        
                         i = j;
                     }
                     i += 1;
@@ -2102,7 +2107,7 @@ impl GoParser {
 
                                     let mut i = 0;
                                     while i < model_lines.len() {
-                                        if let Some(_) = model_struct_regex.captures(model_lines[i])
+                                        if model_struct_regex.captures(model_lines[i]).is_some()
                                         {
                                             let mut field_examples = HashMap::new();
                                             let mut j = i + 1;
@@ -2174,7 +2179,7 @@ impl GoParser {
                 }
             }
         }
-
+        
         struct_examples
     }
 
@@ -2209,7 +2214,7 @@ impl GoParser {
         } else {
             param_str.to_string()
         };
-
+        
         // Normalize whitespace - replace tabs and multiple spaces with a single space
         let normalized_param = param_str.replace('\t', " ");
         let normalized_param = Regex::new(r"\s+")
@@ -2275,51 +2280,51 @@ impl GoParser {
 
         debug!("Parsed parameter parts - Name: {}, Type: {}, DataType: {}, Required: {}, Description: {}",
             name, param_type, data_type, required, description);
-
-        let mut parameter = Parameter {
+                
+                let mut parameter = Parameter {
             name,
             in_type: param_type,
             description: Some(description),
-            required: Some(required),
-            schema: None,
-            ..Default::default()
-        };
-
-        // Handle data type
-        if data_type.starts_with("{") && data_type.ends_with("}") {
-            // Object reference
-            let schema_type = data_type[1..data_type.len() - 1].to_string();
-            let parts: Vec<&str> = schema_type.split_whitespace().collect();
-
-            if parts.len() >= 2 {
-                let type_kind = parts[0];
-                let type_name = parts[1];
-
-                match type_kind {
-                    "object" => {
-                        parameter.schema = Some(Schema {
-                            ref_: Some(format!("#/components/schemas/{}", type_name)),
-                            ..Default::default()
-                        });
+                    required: Some(required),
+                    schema: None,
+                    ..Default::default()
+                };
+                
+                // Handle data type
+                if data_type.starts_with("{") && data_type.ends_with("}") {
+                    // Object reference
+                    let schema_type = data_type[1..data_type.len() - 1].to_string();
+                    let parts: Vec<&str> = schema_type.split_whitespace().collect();
+                    
+                    if parts.len() >= 2 {
+                        let type_kind = parts[0];
+                        let type_name = parts[1];
+                        
+                        match type_kind {
+                            "object" => {
+                                parameter.schema = Some(Schema {
+                                    ref_: Some(format!("#/components/schemas/{}", type_name)),
+                                    ..Default::default()
+                                });
                     }
-                    "array" => {
-                        parameter.schema = Some(Schema {
-                            type_: Some(serde_json::Value::String("array".to_string())),
-                            items: Some(Box::new(Schema {
-                                ref_: Some(format!("#/components/schemas/{}", type_name)),
-                                ..Default::default()
-                            })),
-                            ..Default::default()
-                        });
+                            "array" => {
+                                parameter.schema = Some(Schema {
+                                    type_: Some(serde_json::Value::String("array".to_string())),
+                                    items: Some(Box::new(Schema {
+                                        ref_: Some(format!("#/components/schemas/{}", type_name)),
+                                        ..Default::default()
+                                    })),
+                                    ..Default::default()
+                                });
                     }
                     _ => {
                         return Err(ParserError::ParameterParseError(format!(
                             "Unknown schema type: {}",
                             type_kind
                         )));
-                    }
-                }
-            } else {
+                            }
+                        }
+                    } else {
                 return Err(ParserError::ParameterParseError(format!(
                     "Invalid schema reference format: {}",
                     schema_type
@@ -2332,86 +2337,86 @@ impl GoParser {
                     ref_: Some(format!("#/components/schemas/{}", data_type)),
                     ..Default::default()
                 });
-            } else {
-                // Primitive type
-                parameter.schema = Some(Schema {
-                    type_: Some(serde_json::Value::String(data_type.to_string())),
-                    ..Default::default()
-                });
-
-                // Handle array types
-                if data_type.starts_with("[]") {
+                } else {
+                    // Primitive type
                     parameter.schema = Some(Schema {
-                        type_: Some(serde_json::Value::String("array".to_string())),
-                        items: Some(Box::new(Schema {
-                            type_: Some(serde_json::Value::String(data_type[2..].to_string())),
-                            ..Default::default()
-                        })),
+                        type_: Some(serde_json::Value::String(data_type.to_string())),
                         ..Default::default()
                     });
+                    
+                    // Handle array types
+                    if data_type.starts_with("[]") {
+                        parameter.schema = Some(Schema {
+                            type_: Some(serde_json::Value::String("array".to_string())),
+                            items: Some(Box::new(Schema {
+                                type_: Some(serde_json::Value::String(data_type[2..].to_string())),
+                                ..Default::default()
+                            })),
+                            ..Default::default()
+                        });
                 }
-            }
-        }
-
-        // Parse optional attributes
+                    }
+                }
+                
+                // Parse optional attributes
         if parts.len() > 5 {
             let attrs_str = parts[5..].join(" ");
             for attr in attrs_str.split_whitespace() {
-                if attr.starts_with("Format(") && attr.ends_with(")") {
-                    let format = &attr[7..attr.len() - 1];
-                    if let Some(ref mut schema) = parameter.schema {
-                        schema.format = Some(format.to_string());
-                    }
-                } else if attr.starts_with("Enums(") && attr.ends_with(")") {
-                    let enums = &attr[6..attr.len() - 1];
+                        if attr.starts_with("Format(") && attr.ends_with(")") {
+                            let format = &attr[7..attr.len() - 1];
+                            if let Some(ref mut schema) = parameter.schema {
+                                schema.format = Some(format.to_string());
+                            }
+                        } else if attr.starts_with("Enums(") && attr.ends_with(")") {
+                            let enums = &attr[6..attr.len() - 1];
                     let enum_values: Vec<serde_json::Value> = enums
                         .split(',')
-                        .map(|s| serde_json::Value::String(s.trim().to_string()))
-                        .collect();
-                    if let Some(ref mut schema) = parameter.schema {
-                        schema.enum_values = Some(enum_values);
-                    }
-                } else if attr.starts_with("Default(") && attr.ends_with(")") {
-                    let default = &attr[8..attr.len() - 1];
-                    if let Some(ref mut schema) = parameter.schema {
-                        schema.default = Some(serde_json::Value::String(default.to_string()));
-                    }
-                } else if attr.starts_with("Example(") && attr.ends_with(")") {
-                    let example = &attr[8..attr.len() - 1];
-                    // Try to parse as JSON first
-                    if let Ok(json_value) = serde_json::from_str(example) {
-                        parameter.example = Some(json_value);
-                    } else {
-                        parameter.example = Some(serde_json::Value::String(example.to_string()));
+                                .map(|s| serde_json::Value::String(s.trim().to_string()))
+                                .collect();
+                            if let Some(ref mut schema) = parameter.schema {
+                                schema.enum_values = Some(enum_values);
+                            }
+                        } else if attr.starts_with("Default(") && attr.ends_with(")") {
+                            let default = &attr[8..attr.len() - 1];
+                            if let Some(ref mut schema) = parameter.schema {
+                                schema.default = Some(serde_json::Value::String(default.to_string()));
+                            }
+                        } else if attr.starts_with("Example(") && attr.ends_with(")") {
+                            let example = &attr[8..attr.len() - 1];
+                            // Try to parse as JSON first
+                            if let Ok(json_value) = serde_json::from_str(example) {
+                                parameter.example = Some(json_value);
+                            } else {
+                                parameter.example = Some(serde_json::Value::String(example.to_string()));
+                            }
+                        }
                     }
                 }
-            }
-        }
-
-        // Check for inline example
-        if param_str.contains("{example=") {
-            let parts: Vec<&str> = param_str.splitn(2, "{example=").collect();
-            if parts.len() > 1 {
-                let example_part = parts[1];
-                // Extract the example string (remove the trailing '}' if present)
-                let example_content = if example_part.ends_with('}') {
-                    &example_part[0..example_part.len() - 1]
-                } else {
-                    example_part
-                };
-
-                // Try to parse the example as JSON
+                
+                // Check for inline example
+                if param_str.contains("{example=") {
+                    let parts: Vec<&str> = param_str.splitn(2, "{example=").collect();
+                    if parts.len() > 1 {
+                        let example_part = parts[1];
+                        // Extract the example string (remove the trailing '}' if present)
+                        let example_content = if example_part.ends_with('}') {
+                            &example_part[0..example_part.len() - 1]
+                        } else {
+                            example_part
+                        };
+                        
+                        // Try to parse the example as JSON
                 if let Ok(example_value) =
                     serde_json::from_str::<serde_json::Value>(example_content)
                 {
-                    parameter.example = Some(example_value);
-                } else {
-                    debug!("Failed to parse example as JSON: {}", example_content);
+                            parameter.example = Some(example_value);
+                        } else {
+                            debug!("Failed to parse example as JSON: {}", example_content);
+                        }
+                    }
                 }
-            }
-        }
-
-        Ok(parameter)
+                
+                Ok(parameter)
     }
 
     fn parse_response(&self, response_str: &str) -> Result<Response, ParserError> {
@@ -2425,7 +2430,7 @@ impl GoParser {
             .replace_all(&normalized_resp, " ")
             .to_string();
         debug!("Normalized response string: {}", normalized_resp);
-
+        
         // First, check if there's an example at the end of the string
         let (response_part, example_part) = if normalized_resp.contains("{example=") {
             let parts: Vec<&str> = normalized_resp.splitn(2, "{example=").collect();
@@ -2447,21 +2452,21 @@ impl GoParser {
 
         // Parse the status code
         let code = parts[0].trim();
-        let code = if code == "default" {
-            "default".to_string()
-        } else {
-            code.to_string()
-        };
-
+                let code = if code == "default" {
+                    "default".to_string()
+                } else {
+                    code.to_string()
+                };
+                
         // Prepare the initial response
-        let mut response = Response {
-            code,
+                let mut response = Response {
+                    code,
             description: String::new(),
-            headers: HashMap::new(),
-            content: HashMap::new(),
-            links: HashMap::new(),
-        };
-
+                    headers: HashMap::new(),
+                    content: HashMap::new(),
+                    links: HashMap::new(),
+                };
+                
         // Check if there's a description part
         let mut description = String::new();
         let mut model_part = None;
@@ -2528,12 +2533,12 @@ impl GoParser {
                                 schema: Some(Schema {
                                     type_: Some(serde_json::Value::String("array".to_string())),
                                     items: Some(Box::new(Schema {
-                                        ref_: Some(format!("#/components/schemas/{}", model_name)),
-                                        ..Default::default()
-                                    })),
-                                    ..Default::default()
-                                }),
+                                ref_: Some(format!("#/components/schemas/{}", model_name)),
                                 ..Default::default()
+                                    })),
+                            ..Default::default()
+                                }),
+                                    ..Default::default()
                             },
                         );
                     }
@@ -2555,31 +2560,31 @@ impl GoParser {
         }
 
         response.description = description;
-
-        // Process the example if provided
-        if let Some(example_str) = example_part {
-            // Extract the example string (remove the trailing '}' if present)
-            let example_content = if example_str.ends_with('}') {
-                &example_str[0..example_str.len() - 1]
-            } else {
-                example_str
-            };
-
-            // Try to parse the example as JSON
-            if let Ok(example_value) = serde_json::from_str::<serde_json::Value>(example_content) {
-                if let Some(media_type) = response.content.get_mut("application/json") {
-                    media_type.example = Some(example_value);
-                } else {
-                    let mut media_type = MediaType::default();
-                    media_type.example = Some(example_value);
+                
+                // Process the example if provided
+                if let Some(example_str) = example_part {
+                    // Extract the example string (remove the trailing '}' if present)
+                    let example_content = if example_str.ends_with('}') {
+                        &example_str[0..example_str.len() - 1]
+                    } else {
+                        example_str
+                    };
+                    
+                    // Try to parse the example as JSON
+                    if let Ok(example_value) = serde_json::from_str::<serde_json::Value>(example_content) {
+                        if let Some(media_type) = response.content.get_mut("application/json") {
+                            media_type.example = Some(example_value);
+                        } else {
+                            let mut media_type = MediaType::default();
+                            media_type.example = Some(example_value);
                     response
                         .content
                         .insert("application/json".to_string(), media_type);
+                        }
+                    } else {
+                        debug!("Failed to parse example as JSON: {}", example_content);
+                    }
                 }
-            } else {
-                debug!("Failed to parse example as JSON: {}", example_content);
-            }
-        }
 
         // Ensure we have a default content type for the response
         if response.content.is_empty() {
@@ -2587,20 +2592,20 @@ impl GoParser {
                 .content
                 .insert("application/json".to_string(), MediaType::default());
         }
-
-        Ok(response)
+                
+                Ok(response)
     }
-
+    
     // Extract schema definitions from Go structs in the codebase
     #[allow(dead_code)]
     pub fn extract_struct_schemas(&self, file_paths: &[PathBuf]) -> HashMap<String, Schema> {
         use regex::Regex;
         let mut schemas: HashMap<String, Schema> = HashMap::new();
-
+        
         // Regular expressions for struct parsing
         let struct_regex = Regex::new(r"type\s+(\w+)\s+struct\s*\{").unwrap();
         let field_regex = Regex::new(r#"^\s*(\w+)\s+(\w+(?:\[\])?\*?)(?:\s+`[^`]*`)?.*$"#).unwrap();
-
+        
         // Track package names from imports to handle qualified model names
         let mut package_imports: HashMap<String, String> = HashMap::new();
         let import_regex = Regex::new(r#"import\s+\(\s*((?:[^()]*\n)*)\s*\)"#).unwrap();
@@ -2622,7 +2627,7 @@ impl GoParser {
                                     || {
                                         // If no alias, use the last part of the path
                                         let path = m.get(2).unwrap().as_str();
-                                        path.split('/').last().unwrap_or(path).to_string()
+                                        path.split('/').next_back().unwrap_or(path).to_string()
                                     },
                                     |a| a.as_str().to_string(),
                                 );
@@ -2639,7 +2644,7 @@ impl GoParser {
                         || {
                             // If no alias, use the last part of the path
                             let path = caps.get(2).unwrap().as_str();
-                            path.split('/').last().unwrap_or(path).to_string()
+                            path.split('/').next_back().unwrap_or(path).to_string()
                         },
                         |a| a.as_str().to_string(),
                     );
@@ -2650,21 +2655,21 @@ impl GoParser {
                 // Now parse structs
                 let lines: Vec<&str> = content.lines().collect();
                 let mut i = 0;
-
+                
                 while i < lines.len() {
                     if let Some(captures) = struct_regex.captures(lines[i]) {
                         let struct_name = captures.get(1).unwrap().as_str();
                         debug!("Found struct for schema: {}", struct_name);
-
+                        
                         let mut schema = Schema {
                             type_: Some(serde_json::Value::String("object".to_string())),
                             properties: HashMap::new(),
                             ..Default::default()
                         };
-
+                        
                         let mut required_fields = Vec::new();
                         let mut j = i + 1;
-
+                        
                         // Parse fields until we reach the closing brace
                         while j < lines.len() && !lines[j].trim().starts_with("}") {
                             if let Some(field_captures) = field_regex.captures(lines[j]) {
@@ -2672,7 +2677,7 @@ impl GoParser {
                                 let field_type = field_captures.get(2).unwrap().as_str();
 
                                 debug!("  Field: {} with type: {}", field_name, field_type);
-
+                                
                                 // Convert Go types to OpenAPI types
                                 let field_schema = match field_type {
                                     "string" => Schema {
@@ -2744,52 +2749,52 @@ impl GoParser {
                                                 }
                                             }
                                         } else {
-                                            let item_schema = match item_type {
-                                                "string" => Schema {
+                                        let item_schema = match item_type {
+                                            "string" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "string".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
+                                                ..Default::default()
+                                            },
                                                 "int" | "int8" | "int16" | "int32" | "int64"
                                                 | "uint" | "uint8" | "uint16" | "uint32"
                                                 | "uint64" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "integer".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
-                                                "float32" | "float64" => Schema {
+                                                ..Default::default()
+                                            },
+                                            "float32" | "float64" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "number".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
-                                                "bool" => Schema {
+                                                ..Default::default()
+                                            },
+                                            "bool" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "boolean".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
-                                                _ => {
-                                                    // Reference to another type
-                                                    Schema {
+                                                ..Default::default()
+                                            },
+                                            _ => {
+                                                // Reference to another type
+                                                Schema {
                                                         ref_: Some(format!(
                                                             "#/components/schemas/{}",
                                                             item_type
                                                         )),
-                                                        ..Default::default()
-                                                    }
+                                                    ..Default::default()
                                                 }
-                                            };
-
-                                            Schema {
+                                            }
+                                        };
+                                        
+                                        Schema {
                                                 type_: Some(serde_json::Value::String(
                                                     "array".to_string(),
                                                 )),
-                                                items: Some(Box::new(item_schema)),
-                                                ..Default::default()
-                                            }
+                                            items: Some(Box::new(item_schema)),
+                                            ..Default::default()
+                                        }
                                         }
                                     }
                                     t if t.starts_with("*") => {
@@ -2824,44 +2829,44 @@ impl GoParser {
                                                 }
                                             }
                                         } else {
-                                            match base_type {
-                                                "string" => Schema {
+                                        match base_type {
+                                            "string" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "string".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
+                                                ..Default::default()
+                                            },
                                                 "int" | "int8" | "int16" | "int32" | "int64"
                                                 | "uint" | "uint8" | "uint16" | "uint32"
                                                 | "uint64" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "integer".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
-                                                "float32" | "float64" => Schema {
+                                                ..Default::default()
+                                            },
+                                            "float32" | "float64" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "number".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
-                                                "bool" => Schema {
+                                                ..Default::default()
+                                            },
+                                            "bool" => Schema {
                                                     type_: Some(serde_json::Value::String(
                                                         "boolean".to_string(),
                                                     )),
-                                                    ..Default::default()
-                                                },
-                                                _ => {
-                                                    // Reference to another type
-                                                    Schema {
+                                                ..Default::default()
+                                            },
+                                            _ => {
+                                                // Reference to another type
+                                                Schema {
                                                         ref_: Some(format!(
                                                             "#/components/schemas/{}",
                                                             base_type
                                                         )),
-                                                        ..Default::default()
-                                                    }
+                                                    ..Default::default()
                                                 }
                                             }
+                                        }
                                         }
                                     }
                                     t if t.contains('.') => {
@@ -2900,24 +2905,24 @@ impl GoParser {
                                         }
                                     }
                                 };
-
+                                
                                 // Check if the field is required (not a pointer type)
                                 if !field_type.starts_with("*") {
                                     required_fields.push(field_name.to_string());
                                 }
-
+                                
                                 schema
                                     .properties
                                     .insert(field_name.to_string(), Box::new(field_schema));
                             }
                             j += 1;
                         }
-
+                        
                         // Add required fields if any
                         if !required_fields.is_empty() {
                             schema.required = Some(required_fields);
                         }
-
+                        
                         // Add the schema with different names for better reference resolution
 
                         // 1. Add with the simple name (e.g., "User")
@@ -2926,7 +2931,7 @@ impl GoParser {
                         // 2. Also add package-qualified names for all known package imports
                         // This handles references like "userModel.User" by creating schemas
                         // with both names "User" and "userModel.User"
-                        for (package_alias, _) in &package_imports {
+                        for package_alias in package_imports.keys() {
                             let qualified_name = format!("{}.{}", package_alias, struct_name);
                             debug!("Adding schema with qualified name: {}", qualified_name);
                             schemas.insert(qualified_name, schema.clone());
@@ -2938,7 +2943,7 @@ impl GoParser {
                 }
             }
         }
-
+        
         schemas
     }
 
@@ -2950,11 +2955,11 @@ impl GoParser {
         struct_examples: &HashMap<String, HashMap<String, serde_json::Value>>,
     ) {
         // Try to add examples from struct fields if available
-        for (_content_type, media_type) in &mut response.content {
+        for media_type in response.content.values_mut() {
             if let Some(schema) = &media_type.schema {
                 if let Some(ref_) = &schema.ref_ {
                     // Extract the model name from the reference
-                    let full_type_name = ref_.split('/').last().unwrap_or("");
+                    let full_type_name = ref_.split('/').next_back().unwrap_or("");
                     debug!(
                         "Looking for response examples for model: {}",
                         full_type_name
@@ -2966,7 +2971,7 @@ impl GoParser {
                     let possible_names = vec![
                         full_type_name.to_string(),
                         if full_type_name.contains('.') {
-                            full_type_name.split('.').last().unwrap_or("").to_string()
+                            full_type_name.split('.').next_back().unwrap_or("").to_string()
                         } else {
                             full_type_name.to_string()
                         },
@@ -2988,7 +2993,7 @@ impl GoParser {
                 } else if let Some(items) = &schema.items {
                     // Handle array items that have references
                     if let Some(ref_) = &items.ref_ {
-                        let item_type_name = ref_.split('/').last().unwrap_or("");
+                        let item_type_name = ref_.split('/').next_back().unwrap_or("");
                         debug!(
                             "Looking for response array item examples for model: {}",
                             item_type_name
@@ -2997,7 +3002,7 @@ impl GoParser {
                         let possible_names = vec![
                             item_type_name.to_string(),
                             if item_type_name.contains('.') {
-                                item_type_name.split('.').last().unwrap_or("").to_string()
+                                item_type_name.split('.').next_back().unwrap_or("").to_string()
                             } else {
                                 item_type_name.to_string()
                             },
@@ -3048,7 +3053,7 @@ impl GoParser {
 
                         // Also add the bare model name without package prefix
                         if model_name.contains('.') {
-                            if let Some(base_name) = model_name.split('.').last() {
+                            if let Some(base_name) = model_name.split('.').next_back() {
                                 referenced_models.insert(base_name.to_string());
                             }
                         }
@@ -3063,7 +3068,7 @@ impl GoParser {
 
                         // Also add the bare model name without package prefix
                         if model_name.contains('.') {
-                            if let Some(base_name) = model_name.split('.').last() {
+                            if let Some(base_name) = model_name.split('.').next_back() {
                                 referenced_models.insert(base_name.to_string());
                             }
                         }
@@ -3078,7 +3083,7 @@ impl GoParser {
 
                         // Also add the bare model name without package prefix
                         if model_name.contains('.') {
-                            if let Some(base_name) = model_name.split('.').last() {
+                            if let Some(base_name) = model_name.split('.').next_back() {
                                 referenced_models.insert(base_name.to_string());
                             }
                         }
@@ -3139,7 +3144,7 @@ impl GoParser {
                                         || {
                                             // If no alias, use the last part of the path
                                             let path = m.get(2).unwrap().as_str();
-                                            path.split('/').last().unwrap_or(path).to_string()
+                                            path.split('/').next_back().unwrap_or(path).to_string()
                                         },
                                         |a| a.as_str().to_string(),
                                     );
@@ -3156,7 +3161,7 @@ impl GoParser {
                             || {
                                 // If no alias, use the last part of the path
                                 let path = caps.get(2).unwrap().as_str();
-                                path.split('/').last().unwrap_or(path).to_string()
+                                path.split('/').next_back().unwrap_or(path).to_string()
                             },
                             |a| a.as_str().to_string(),
                         );
@@ -3177,7 +3182,7 @@ impl GoParser {
                             let is_referenced = models_to_process.contains(struct_name)
                                 || models_to_process.iter().any(|m| {
                                     m.contains('.')
-                                        && m.split('.').last().unwrap_or("") == struct_name
+                                        && m.split('.').next_back().unwrap_or("") == struct_name
                                 });
 
                             if is_referenced && !processed_models.contains(struct_name) {
@@ -3237,7 +3242,7 @@ impl GoParser {
                                 // 2. Also add package-qualified names for all known package imports
                                 // This handles references like "userModel.User" by creating schemas
                                 // with both names "User" and "userModel.User"
-                                for (package_alias, _) in &package_imports {
+                                for package_alias in package_imports.keys() {
                                     let qualified_name =
                                         format!("{}.{}", package_alias, struct_name);
                                     debug!("Adding schema with qualified name: {}", qualified_name);
@@ -3258,7 +3263,7 @@ impl GoParser {
 
             // Add all new dependencies to process
             models_to_process.clear();
-            for (_, deps) in &schema_dependencies {
+            for deps in schema_dependencies.values() {
                 for dep in deps {
                     if !processed_models.contains(dep) && !dep.contains("[]") {
                         models_to_process.insert(dep.clone());
