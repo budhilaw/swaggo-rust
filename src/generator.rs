@@ -8,11 +8,12 @@ use std::{
 };
 
 use crate::models::{
-    Components, Contact, ExternalDocs, Info, License, MediaType, OAuthFlows, Operation, OpenAPI, 
-    ParsedApiInfo, ParsedOperation, PathItem, Schema, SecurityScheme, Server, Tag
+    Components, Operation, OpenAPI, 
+    ParsedApiInfo, ParsedOperation, PathItem, Schema, Server
 };
 
-// Default maximum file size (5MB)
+// Add #[allow(dead_code)] before the constant to suppress the warning
+#[allow(dead_code)]
 const DEFAULT_MAX_FILE_SIZE: usize = 5 * 1024 * 1024;
 /// Generates OpenAPI 3.1.1 documentation from parsed API info and operations
 pub struct Generator {
@@ -25,6 +26,7 @@ pub struct Generator {
 
 impl Generator {
     /// Create a new Generator instance
+    #[allow(dead_code)]
     pub fn new(api_info: ParsedApiInfo, operations: Vec<ParsedOperation>, schemas: HashMap<String, Schema>, openapi_version: String) -> Self {
         Self {
             api_info,
@@ -1020,6 +1022,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn convert_to_openapi(&self) -> OpenAPI {
         let mut openapi = OpenAPI {
             openapi: self.openapi_version.clone(),
@@ -1116,6 +1119,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
     }
     
     // Add method to ensure all referenced schemas exist in the components
+    #[allow(dead_code)]
     fn ensure_referenced_schemas_exist(&self, openapi: &mut OpenAPI) {
         // Create a function to find schema references in an object
         let mut references = HashSet::new();
@@ -1174,6 +1178,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
     }
     
     // Helper to collect references from a schema
+    #[allow(dead_code)]
     fn collect_references(&self, schema: &Schema, references: &mut HashSet<String>) {
         if let Some(ref_) = &schema.ref_ {
             references.insert(ref_.clone());
@@ -1210,6 +1215,7 @@ func ServeDirectoryListing(w http.ResponseWriter, r *http.Request, dir string) {
         }
     }
 
+    #[allow(dead_code)]
     fn to_openapi(&self) -> OpenAPI {
         // Use the new implementation
         self.convert_to_openapi()

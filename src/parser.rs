@@ -1,12 +1,5 @@
 use anyhow::{Context, Result};
 use log::{debug, warn};
-use nom::{
-    branch::alt,
-    bytes::complete::{take_until, take_while1},
-    character::complete::{char, space1},
-    combinator::{opt, recognize},
-    sequence::{delimited, terminated},
-};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
@@ -15,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-use walkdir::WalkDir;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -1070,6 +1062,7 @@ impl GoParser {
     }
     
     // Original collect_referenced_models method renamed to avoid conflicts
+    #[allow(dead_code)]
     fn collect_model_references_from_annotations(&self, file_paths: &[PathBuf]) -> HashSet<String> {
         // Original implementation...
         let mut referenced_models = HashSet::new();
@@ -1250,7 +1243,7 @@ impl GoParser {
                 },
                 AnnotationType::Param => {
                     match self.parse_parameter(&annotation.value) {
-                        Ok(mut parameter) => {
+                        Ok(parameter) => {
                             // For body parameters, extract schema ref for request body
                             if parameter.in_type == "body" {
                                 if parameter.schema.is_some() {
@@ -2330,6 +2323,7 @@ impl GoParser {
     }
     
     // Extract schema definitions from Go structs in the codebase
+    #[allow(dead_code)]
     pub fn extract_struct_schemas(&self, file_paths: &[PathBuf]) -> HashMap<String, Schema> {
         use regex::Regex;
         let mut schemas: HashMap<String, Schema> = HashMap::new();
@@ -2615,6 +2609,7 @@ impl GoParser {
     }
 
     // Add a new method to set response examples
+    #[allow(dead_code)]
     fn set_response_examples(&self, 
                          response: &mut Response, 
                          struct_examples: &HashMap<String, HashMap<String, serde_json::Value>>) {
@@ -2684,6 +2679,7 @@ impl GoParser {
     }
 
     // New method to collect model names that are referenced in annotations
+    #[allow(dead_code)]
     fn collect_referenced_models(&self, file_paths: &[PathBuf]) -> HashSet<String> {
         let mut referenced_models = HashSet::new();
         
@@ -2850,7 +2846,7 @@ impl GoParser {
                                         debug!("  Field: {} with type: {}", field_name, field_type);
                                         
                                         // Track dependencies in this field
-                                        let mut field_schema = self.convert_go_type_to_schema(field_type);
+                                        let field_schema = self.convert_go_type_to_schema(field_type);
                                         
                                         // Add any referenced types to our dependencies
                                         self.collect_field_dependencies(field_type, &mut field_dependencies);
